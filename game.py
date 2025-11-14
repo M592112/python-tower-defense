@@ -44,10 +44,8 @@ pygame.display.set_caption("Tower Defense")
 clock = pygame.time.Clock()
 font = pygame.font.Font(None, 36)
 small_font = pygame.font.Font(None, 24)
+large_font = pygame.font.Font(None, 72)
 
-# ---------------------------------------
-# ENEMY CLASS
-# ---------------------------------------
 class Enemy:
     def __init__(self, speed_multiplier=1, health_multiplier=1):
         self.path_index = 0
@@ -58,28 +56,28 @@ class Enemy:
         self.health = 100 * health_multiplier
         self.max_health = 100 * health_multiplier
         self.reward = int(10 * health_multiplier)
-
+        
     def move(self):
         if self.path_index < len(PATH) - 1:
             target_x = PATH[self.path_index + 1][0] * GRID_SIZE + GRID_SIZE // 2
             target_y = PATH[self.path_index + 1][1] * GRID_SIZE + GRID_SIZE // 2
-
+            
             dx = target_x - self.x
             dy = target_y - self.y
             distance = math.sqrt(dx**2 + dy**2)
-
+            
             if distance < self.speed:
                 self.path_index += 1
             else:
                 self.x += (dx / distance) * self.speed
                 self.y += (dy / distance) * self.speed
-
+    
     def take_damage(self, damage):
         self.health -= damage
-
+        
     def is_alive(self):
         return self.health > 0
-
+    
     def draw(self):
         pygame.draw.circle(screen, RED, (int(self.x), int(self.y)), self.radius)
         # Health bar
@@ -88,13 +86,10 @@ class Enemy:
         health_ratio = self.health / self.max_health
         pygame.draw.rect(screen, BLACK, (self.x - bar_width//2, self.y - 20, bar_width, bar_height))
         pygame.draw.rect(screen, GREEN, (self.x - bar_width//2, self.y - 20, bar_width * health_ratio, bar_height))
-
+    
     def reached_end(self):
         return self.path_index >= len(PATH) - 1
 
-# ---------------------------------------
-# PROJECTILE CLASS
-# ---------------------------------------
 class Projectile:
     def __init__(self, x, y, target, damage):
         self.x = x
@@ -103,28 +98,24 @@ class Projectile:
         self.speed = 5
         self.damage = damage
         self.radius = 5
-
+        
     def move(self):
         if self.target and self.target.is_alive():
             dx = self.target.x - self.x
             dy = self.target.y - self.y
             distance = math.sqrt(dx**2 + dy**2)
-
+            
             if distance < self.speed:
-                return True  # hit target
+                return True  # Hit target
             else:
                 self.x += (dx / distance) * self.speed
                 self.y += (dy / distance) * self.speed
                 return False
-
-        return True  # target dead
-
+        return True  # Target dead, remove projectile
+    
     def draw(self):
         pygame.draw.circle(screen, YELLOW, (int(self.x), int(self.y)), self.radius)
 
-# ---------------------------------------
-# TOWER CLASS
-# ---------------------------------------
 class Tower:
     def __init__(self, grid_x, grid_y):
         self.grid_x = grid_x
@@ -134,9 +125,9 @@ class Tower:
         self.level = 1
         self.range = 100
         self.damage = 20
-        self.fire_rate = 60
+        self.fire_rate = 60  # frames between shots
         self.fire_timer = 0
-
+        
     def upgrade(self):
         if self.level < 3:
             self.level += 1
@@ -145,60 +136,56 @@ class Tower:
             self.fire_rate = max(30, self.fire_rate - 10)
             return True
         return False
-
+    
     def can_upgrade(self):
         return self.level < 3
-
+        
     def find_target(self, enemies):
         for enemy in enemies:
             distance = math.sqrt((enemy.x - self.x)**2 + (enemy.y - self.y)**2)
             if distance <= self.range:
                 return enemy
         return None
-
+    
     def shoot(self, target):
         if self.fire_timer <= 0:
             self.fire_timer = self.fire_rate
             return Projectile(self.x, self.y, target, self.damage)
         return None
-
+    
     def update(self):
         if self.fire_timer > 0:
             self.fire_timer -= 1
-
+    
     def is_clicked(self, mouse_x, mouse_y):
-        rect = pygame.Rect(self.grid_x * GRID_SIZE, self.grid_y * GRID_SIZE, GRID_SIZE, GRID_SIZE)
-        return rect.collidepoint(mouse_x, mouse_y)
-
+        tower_rect = pygame.Rect(self.grid_x * GRID_SIZE, self.grid_y * GRID_SIZE, GRID_SIZE, GRID_SIZE)
+        return tower_rect.collidepoint(mouse_x, mouse_y)
+        
     def draw(self, selected=False):
-        # Range circle
-        pygame.draw.circle(
-            screen, LIGHT_BLUE, (int(self.x), int(self.y)), self.range,
-            2 if selected else 1
-        )
-
-        # Tower color by level
+        # Draw range circle
+        if selected:
+            pygame.draw.circle(screen, LIGHT_BLUE, (int(self.x), int(self.y)), self.range, 2)
+        else:
+            pygame.draw.circle(screen, LIGHT_BLUE, (int(self.x), int(self.y)), self.range, 1)
+        
+        # Draw tower with color based on level
         color = BLUE if self.level == 1 else (DARK_BLUE if self.level == 2 else PURPLE)
-        pygame.draw.rect(
-            screen, color,
-            (self.grid_x * GRID_SIZE + 5, self.grid_y * GRID_SIZE + 5, GRID_SIZE - 10, GRID_SIZE - 10)
-        )
+        pygame.draw.rect(screen, color, (self.grid_x * GRID_SIZE + 5, self.grid_y * GRID_SIZE + 5, 
+                                       GRID_SIZE - 10, GRID_SIZE - 10))
+        
+        # Draw level indicator
+        level_text = small_font.render(str(self.level), True, WHITE)
+        screen.blit(level_text, (self.x - 7, self.y - 10))
 
-        # Level indicator
-        text = small_font.render(str(self.level), True, WHITE)
-        screen.blit(text, (self.x - 7, self.y - 10))
-
-# ---------------------------------------
-# WAVE MANAGER
-# ---------------------------------------
 class WaveManager:
     def __init__(self):
         self.wave = 1
         self.enemies_per_wave = 5
         self.enemies_to_spawn = self.enemies_per_wave
         self.spawn_timer = 0
-        self.spawn_delay = 90
-
+        self.spawn_delay = 90  # frames between spawns
+        self.wave_complete = False
+        
     def spawn_enemy(self):
         if self.enemies_to_spawn > 0 and self.spawn_timer <= 0:
             self.spawn_timer = self.spawn_delay
@@ -207,46 +194,52 @@ class WaveManager:
             health_mult = 1 + (self.wave - 1) * 0.2
             return Enemy(speed_mult, health_mult)
         return None
-
+    
     def update(self):
         if self.spawn_timer > 0:
             self.spawn_timer -= 1
-
+    
     def next_wave(self):
         self.wave += 1
         self.enemies_per_wave += 2
         self.enemies_to_spawn = self.enemies_per_wave
+        self.wave_complete = False
 
-# ---------------------------------------
-# GAME STATE
-# ---------------------------------------
 class GameState:
     def __init__(self):
         self.money = 200
         self.lives = 20
         self.score = 0
-
+        self.game_over = False
+        
     def add_money(self, amount):
         self.money += amount
-
+        
     def spend_money(self, amount):
         if self.money >= amount:
             self.money -= amount
             return True
         return False
-
+    
     def lose_life(self):
         self.lives -= 1
-
+        if self.lives <= 0:
+            self.game_over = True
+        
     def add_score(self, points):
         self.score += points
+    
+    def reset(self):
+        self.money = 200
+        self.lives = 20
+        self.score = 0
+        self.game_over = False
 
-# ---------------------------------------
-# HELPERS
-# ---------------------------------------
 def is_valid_tower_position(grid_x, grid_y, towers):
+    # Check if position is on path
     if (grid_x, grid_y) in PATH:
         return False
+    # Check if position is already occupied
     for tower in towers:
         if tower.grid_x == grid_x and tower.grid_y == grid_y:
             return False
@@ -264,142 +257,163 @@ def draw_path():
         pygame.draw.rect(screen, BROWN, rect)
 
 def draw_ui(game_state, wave_manager, selected_tower):
-    screen.blit(font.render(f"Wave: {wave_manager.wave}", True, WHITE), (10, 10))
-    screen.blit(font.render(f"Money: ${game_state.money}", True, GOLD), (10, 45))
-    screen.blit(font.render(f"Lives: {game_state.lives}", True, RED), (10, 80))
-    screen.blit(small_font.render(f"Score: {game_state.score}", True, WHITE), (10, 115))
-
+    # Wave info
+    wave_text = font.render(f"Wave: {wave_manager.wave}", True, WHITE)
+    screen.blit(wave_text, (10, 10))
+    
+    # Money
+    money_text = font.render(f"Money: ${game_state.money}", True, GOLD)
+    screen.blit(money_text, (10, 45))
+    
+    # Lives
+    lives_text = font.render(f"Lives: {game_state.lives}", True, RED)
+    screen.blit(lives_text, (10, 80))
+    
+    # Score
+    score_text = small_font.render(f"Score: {game_state.score}", True, WHITE)
+    screen.blit(score_text, (10, 115))
+    
     # Tower cost
-    screen.blit(small_font.render(f"Tower: ${TOWER_COST}", True, WHITE),
-                (WINDOW_WIDTH - 150, 10))
-
+    cost_text = small_font.render(f"Tower: ${TOWER_COST}", True, WHITE)
+    screen.blit(cost_text, (WINDOW_WIDTH - 150, 10))
+    
+    # Selected tower info
     if selected_tower:
-        screen.blit(small_font.render(f"Upgrade: ${UPGRADE_COST}", True, WHITE),
-                    (WINDOW_WIDTH - 170, 35))
-
+        upgrade_text = small_font.render(f"Upgrade: ${UPGRADE_COST}", True, WHITE)
+        screen.blit(upgrade_text, (WINDOW_WIDTH - 170, 35))
+        
         if selected_tower.level >= 3:
-            screen.blit(small_font.render("MAX LEVEL", True, WHITE),
-                        (WINDOW_WIDTH - 140, 60))
+            max_text = small_font.render("MAX LEVEL", True, WHITE)
+            screen.blit(max_text, (WINDOW_WIDTH - 140, 60))
         else:
-            screen.blit(small_font.render("Press U to upgrade", True, WHITE),
-                        (WINDOW_WIDTH - 180, 60))
+            press_u_text = small_font.render("Press U to upgrade", True, WHITE)
+            screen.blit(press_u_text, (WINDOW_WIDTH - 180, 60))
 
-# ---------------------------------------
-# MAIN GAME LOOP
-# ---------------------------------------
+def draw_game_over(game_state):
+    # Semi-transparent overlay
+    overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill(BLACK)
+    screen.blit(overlay, (0, 0))
+    
+    # Game Over text
+    game_over_text = large_font.render("GAME OVER", True, RED)
+    text_rect = game_over_text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 80))
+    screen.blit(game_over_text, text_rect)
+    
+    # Final score
+    score_text = font.render(f"Final Score: {game_state.score}", True, WHITE)
+    score_rect = score_text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2))
+    screen.blit(score_text, score_rect)
+    
+    # Restart instruction
+    restart_text = small_font.render("Press R to Restart or Q to Quit", True, WHITE)
+    restart_rect = restart_text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 60))
+    screen.blit(restart_text, restart_rect)
+
+def reset_game():
+    return [], [], [], WaveManager(), GameState(), None
+
 def main():
     running = True
-    enemies = []
-    towers = []
-    projectiles = []
-    wave_manager = WaveManager()
-    game_state = GameState()
-    selected_tower = None
-
+    enemies, towers, projectiles, wave_manager, game_state, selected_tower = reset_game()
+    
     while running:
-        # -----------------------
-        # EVENTS
-        # -----------------------
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-
-            elif event.type == pygame.MOUSEBUTTONDOWN:
+            elif event.type == pygame.KEYDOWN:
+                if game_state.game_over:
+                    if event.key == pygame.K_r:
+                        enemies, towers, projectiles, wave_manager, game_state, selected_tower = reset_game()
+                    elif event.key == pygame.K_q:
+                        running = False
+                else:
+                    if event.key == pygame.K_u and selected_tower:
+                        if selected_tower.can_upgrade() and game_state.spend_money(UPGRADE_COST):
+                            selected_tower.upgrade()
+            elif event.type == pygame.MOUSEBUTTONDOWN and not game_state.game_over:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 grid_x = mouse_x // GRID_SIZE
                 grid_y = mouse_y // GRID_SIZE
-
+                
+                # Check if clicking on existing tower
                 clicked_tower = None
                 for tower in towers:
                     if tower.is_clicked(mouse_x, mouse_y):
                         clicked_tower = tower
                         break
-
+                
                 if clicked_tower:
                     selected_tower = clicked_tower
                 elif is_valid_tower_position(grid_x, grid_y, towers):
                     if game_state.spend_money(TOWER_COST):
                         towers.append(Tower(grid_x, grid_y))
                         selected_tower = None
-
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_u and selected_tower:
-                    if selected_tower.can_upgrade() and game_state.spend_money(UPGRADE_COST):
-                        selected_tower.upgrade()
-
-        # -----------------------
-        # WAVE & ENEMY LOGIC
-        # -----------------------
-        wave_manager.update()
-        new_enemy = wave_manager.spawn_enemy()
-        if new_enemy:
-            enemies.append(new_enemy)
-
-        if wave_manager.enemies_to_spawn == 0 and len(enemies) == 0:
-            wave_manager.next_wave()
-
-        for enemy in enemies[:]:
-            enemy.move()
-            if enemy.reached_end():
-                game_state.lose_life()
-                enemies.remove(enemy)
-
-        # -----------------------
-        # TOWER LOGIC
-        # -----------------------
-        for tower in towers:
-            tower.update()
-            target = tower.find_target(enemies)
-            if target:
-                projectile = tower.shoot(target)
-                if projectile:
-                    projectiles.append(projectile)
-
-        # -----------------------
-        # PROJECTILE LOGIC
-        # -----------------------
-        for projectile in projectiles[:]:
-            if projectile.move():
-                if projectile.target and projectile.target.is_alive():
-                    projectile.target.take_damage(projectile.damage)
-                projectiles.remove(projectile)
-
-        # -----------------------
-        # REMOVE DEAD ENEMIES
-        # -----------------------
-        for enemy in enemies[:]:
-            if not enemy.is_alive():
-                game_state.add_money(enemy.reward)
-                game_state.add_score(enemy.reward * 10)
-                enemies.remove(enemy)
-
-        # -----------------------
-        # GAME OVER CHECK
-        # -----------------------
-        if game_state.lives <= 0:
-            running = False
-
-        # -----------------------
-        # DRAWING
-        # -----------------------
+        
+        if not game_state.game_over:
+            # Spawn enemies
+            wave_manager.update()
+            new_enemy = wave_manager.spawn_enemy()
+            if new_enemy:
+                enemies.append(new_enemy)
+            
+            # Check if wave complete
+            if wave_manager.enemies_to_spawn == 0 and len(enemies) == 0:
+                wave_manager.next_wave()
+            
+            # Update enemies
+            for enemy in enemies[:]:
+                enemy.move()
+                if enemy.reached_end():
+                    game_state.lose_life()
+                    enemies.remove(enemy)
+            
+            # Update towers
+            for tower in towers:
+                tower.update()
+                target = tower.find_target(enemies)
+                if target:
+                    projectile = tower.shoot(target)
+                    if projectile:
+                        projectiles.append(projectile)
+            
+            # Update projectiles
+            for projectile in projectiles[:]:
+                if projectile.move():
+                    if projectile.target and projectile.target.is_alive():
+                        projectile.target.take_damage(projectile.damage)
+                    projectiles.remove(projectile)
+            
+            # Remove dead enemies and give rewards
+            for enemy in enemies[:]:
+                if not enemy.is_alive():
+                    game_state.add_money(enemy.reward)
+                    game_state.add_score(enemy.reward * 10)
+                    enemies.remove(enemy)
+        
+        # Fill screen
         screen.fill(GREEN)
+        
+        # Draw elements
         draw_path()
-
         for tower in towers:
             tower.draw(selected=tower == selected_tower)
-
         for projectile in projectiles:
             projectile.draw()
-
         for enemy in enemies:
             enemy.draw()
-
         draw_grid()
         draw_ui(game_state, wave_manager, selected_tower)
-
+        
+        # Draw game over screen if needed
+        if game_state.game_over:
+            draw_game_over(game_state)
+        
+        # Update display
         pygame.display.flip()
         clock.tick(FPS)
-
+    
     pygame.quit()
     sys.exit()
 
