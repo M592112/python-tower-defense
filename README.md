@@ -116,7 +116,10 @@ Built with Python and Pygame as a classic tower defense experience.
 ---
 ## Demo Video
 
-Watch the gameplay demo here: [Tower Defense Demo](https://youtu.be/z27PUcFpSgw)
+## Demo Video
+
+[![Tower Defense Demo](https://img.youtube.com/vi/z27PUcFpSgw/0.jpg)](https://youtu.be/z27PUcFpSgw)
+
 
 
 **Have fun defending your base!** 🏰
