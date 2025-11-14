@@ -18,6 +18,8 @@ GREEN = (34, 139, 34)
 BROWN = (139, 69, 19)
 GRAY = (128, 128, 128)
 RED = (255, 0, 0)
+BLUE = (0, 0, 255)
+LIGHT_BLUE = (173, 216, 230)
 
 # Path coordinates (grid positions)
 PATH = [
@@ -72,6 +74,34 @@ class Enemy:
     def reached_end(self):
         return self.path_index >= len(PATH) - 1
 
+class Tower:
+    def __init__(self, grid_x, grid_y):
+        self.grid_x = grid_x
+        self.grid_y = grid_y
+        self.x = grid_x * GRID_SIZE + GRID_SIZE // 2
+        self.y = grid_y * GRID_SIZE + GRID_SIZE // 2
+        self.range = 100
+        self.damage = 20
+        self.fire_rate = 60  # frames between shots
+        self.fire_timer = 0
+        
+    def draw(self):
+        # Draw range circle
+        pygame.draw.circle(screen, LIGHT_BLUE, (int(self.x), int(self.y)), self.range, 1)
+        # Draw tower
+        pygame.draw.rect(screen, BLUE, (self.grid_x * GRID_SIZE + 5, self.grid_y * GRID_SIZE + 5, 
+                                       GRID_SIZE - 10, GRID_SIZE - 10))
+
+def is_valid_tower_position(grid_x, grid_y, towers):
+    # Check if position is on path
+    if (grid_x, grid_y) in PATH:
+        return False
+    # Check if position is already occupied
+    for tower in towers:
+        if tower.grid_x == grid_x and tower.grid_y == grid_y:
+            return False
+    return True
+
 def draw_grid():
     for x in range(0, WINDOW_WIDTH, GRID_SIZE):
         pygame.draw.line(screen, GRAY, (x, 0), (x, WINDOW_HEIGHT), 1)
@@ -86,11 +116,19 @@ def draw_path():
 def main():
     running = True
     enemies = [Enemy()]
+    towers = []
     
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                grid_x = mouse_x // GRID_SIZE
+                grid_y = mouse_y // GRID_SIZE
+                
+                if is_valid_tower_position(grid_x, grid_y, towers):
+                    towers.append(Tower(grid_x, grid_y))
         
         # Update enemies
         for enemy in enemies:
@@ -101,6 +139,8 @@ def main():
         
         # Draw elements
         draw_path()
+        for tower in towers:
+            tower.draw()
         for enemy in enemies:
             enemy.draw()
         draw_grid()
