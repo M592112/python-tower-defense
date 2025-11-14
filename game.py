@@ -37,16 +37,18 @@ PATH = [
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 pygame.display.set_caption("Tower Defense")
 clock = pygame.time.Clock()
+font = pygame.font.Font(None, 36)
 
 class Enemy:
-    def __init__(self):
+    def __init__(self, speed_multiplier=1, health_multiplier=1):
         self.path_index = 0
         self.x = PATH[0][0] * GRID_SIZE + GRID_SIZE // 2
         self.y = PATH[0][1] * GRID_SIZE + GRID_SIZE // 2
-        self.speed = 1
+        self.speed = 1 * speed_multiplier
         self.radius = 12
-        self.health = 100
-        self.max_health = 100
+        self.health = 100 * health_multiplier
+        self.max_health = 100 * health_multiplier
+        self.reward = 10
         
     def move(self):
         if self.path_index < len(PATH) - 1:
@@ -82,12 +84,12 @@ class Enemy:
         return self.path_index >= len(PATH) - 1
 
 class Projectile:
-    def __init__(self, x, y, target):
+    def __init__(self, x, y, target, damage):
         self.x = x
         self.y = y
         self.target = target
         self.speed = 5
-        self.damage = 20
+        self.damage = damage
         self.radius = 5
         
     def move(self):
@@ -128,7 +130,7 @@ class Tower:
     def shoot(self, target):
         if self.fire_timer <= 0:
             self.fire_timer = self.fire_rate
-            return Projectile(self.x, self.y, target)
+            return Projectile(self.x, self.y, target, self.damage)
         return None
     
     def update(self):
@@ -141,6 +143,35 @@ class Tower:
         # Draw tower
         pygame.draw.rect(screen, BLUE, (self.grid_x * GRID_SIZE + 5, self.grid_y * GRID_SIZE + 5, 
                                        GRID_SIZE - 10, GRID_SIZE - 10))
+
+class WaveManager:
+    def __init__(self):
+        self.wave = 1
+        self.enemies_per_wave = 5
+        self.enemies_to_spawn = self.enemies_per_wave
+        self.spawn_timer = 0
+        self.spawn_delay = 90  # frames between spawns
+        self.wave_complete = False
+        
+    def spawn_enemy(self):
+        if self.enemies_to_spawn > 0 and self.spawn_timer <=0:
+            
+            self.spawn_timer = self.spawn_delay
+            self.enemies_to_spawn -= 1
+            speed_mult = 1 + (self.wave - 1) * 0.1
+            health_mult = 1 + (self.wave - 1) * 0.2
+            return Enemy(speed_mult, health_mult)
+        return None
+    
+    def update(self):
+        if self.spawn_timer > 0:
+            self.spawn_timer -= 1
+    
+    def next_wave(self):
+        self.wave += 1
+        self.enemies_per_wave += 2
+        self.enemies_to_spawn = self.enemies_per_wave
+        self.wave_complete = False
 
 def is_valid_tower_position(grid_x, grid_y, towers):
     # Check if position is on path
@@ -165,9 +196,10 @@ def draw_path():
 
 def main():
     running = True
-    enemies = [Enemy()]
+    enemies = []
     towers = []
     projectiles = []
+    wave_manager = WaveManager()
     
     while running:
         for event in pygame.event.get():
@@ -180,6 +212,16 @@ def main():
                 
                 if is_valid_tower_position(grid_x, grid_y, towers):
                     towers.append(Tower(grid_x, grid_y))
+        
+        # Spawn enemies
+        wave_manager.update()
+        new_enemy = wave_manager.spawn_enemy()
+        if new_enemy:
+            enemies.append(new_enemy)
+        
+        # Check if wave complete
+        if wave_manager.enemies_to_spawn == 0 and len(enemies) == 0:
+            wave_manager.next_wave()
         
         # Update enemies
         for enemy in enemies:
@@ -201,7 +243,7 @@ def main():
                     projectile.target.take_damage(projectile.damage)
                 projectiles.remove(projectile)
         
-        # Remove dead enemies
+        # Remove dead enemies and enemies that reached end
         enemies = [enemy for enemy in enemies if enemy.is_alive() and not enemy.reached_end()]
         
         # Fill screen
@@ -216,6 +258,10 @@ def main():
         for enemy in enemies:
             enemy.draw()
         draw_grid()
+        
+        # Draw wave info
+        wave_text = font.render(f"Wave: {wave_manager.wave}", True, WHITE)
+        screen.blit(wave_text, (10, 10))
         
         # Update display
         pygame.display.flip()
