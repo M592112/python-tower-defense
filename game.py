@@ -20,6 +20,7 @@ GRAY = (128, 128, 128)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 LIGHT_BLUE = (173, 216, 230)
+YELLOW = (255, 255, 0)
 
 # Path coordinates (grid positions)
 PATH = [
@@ -62,6 +63,12 @@ class Enemy:
                 self.x += (dx / distance) * self.speed
                 self.y += (dy / distance) * self.speed
     
+    def take_damage(self, damage):
+        self.health -= damage
+        
+    def is_alive(self):
+        return self.health > 0
+    
     def draw(self):
         pygame.draw.circle(screen, RED, (int(self.x), int(self.y)), self.radius)
         # Health bar
@@ -74,6 +81,32 @@ class Enemy:
     def reached_end(self):
         return self.path_index >= len(PATH) - 1
 
+class Projectile:
+    def __init__(self, x, y, target):
+        self.x = x
+        self.y = y
+        self.target = target
+        self.speed = 5
+        self.damage = 20
+        self.radius = 5
+        
+    def move(self):
+        if self.target and self.target.is_alive():
+            dx = self.target.x - self.x
+            dy = self.target.y - self.y
+            distance = math.sqrt(dx**2 + dy**2)
+            
+            if distance < self.speed:
+                return True  # Hit target
+            else:
+                self.x += (dx / distance) * self.speed
+                self.y += (dy / distance) * self.speed
+                return False
+        return True  # Target dead, remove projectile
+    
+    def draw(self):
+        pygame.draw.circle(screen, YELLOW, (int(self.x), int(self.y)), self.radius)
+
 class Tower:
     def __init__(self, grid_x, grid_y):
         self.grid_x = grid_x
@@ -84,6 +117,23 @@ class Tower:
         self.damage = 20
         self.fire_rate = 60  # frames between shots
         self.fire_timer = 0
+        
+    def find_target(self, enemies):
+        for enemy in enemies:
+            distance = math.sqrt((enemy.x - self.x)**2 + (enemy.y - self.y)**2)
+            if distance <= self.range:
+                return enemy
+        return None
+    
+    def shoot(self, target):
+        if self.fire_timer <= 0:
+            self.fire_timer = self.fire_rate
+            return Projectile(self.x, self.y, target)
+        return None
+    
+    def update(self):
+        if self.fire_timer > 0:
+            self.fire_timer -= 1
         
     def draw(self):
         # Draw range circle
@@ -117,6 +167,7 @@ def main():
     running = True
     enemies = [Enemy()]
     towers = []
+    projectiles = []
     
     while running:
         for event in pygame.event.get():
@@ -134,6 +185,25 @@ def main():
         for enemy in enemies:
             enemy.move()
         
+        # Update towers
+        for tower in towers:
+            tower.update()
+            target = tower.find_target(enemies)
+            if target:
+                projectile = tower.shoot(target)
+                if projectile:
+                    projectiles.append(projectile)
+        
+        # Update projectiles
+        for projectile in projectiles[:]:
+            if projectile.move():
+                if projectile.target and projectile.target.is_alive():
+                    projectile.target.take_damage(projectile.damage)
+                projectiles.remove(projectile)
+        
+        # Remove dead enemies
+        enemies = [enemy for enemy in enemies if enemy.is_alive() and not enemy.reached_end()]
+        
         # Fill screen
         screen.fill(GREEN)
         
@@ -141,6 +211,8 @@ def main():
         draw_path()
         for tower in towers:
             tower.draw()
+        for projectile in projectiles:
+            projectile.draw()
         for enemy in enemies:
             enemy.draw()
         draw_grid()
