@@ -10,6 +10,7 @@ WINDOW_WIDTH = 800
 WINDOW_HEIGHT = 600
 FPS = 60
 GRID_SIZE = 40
+TOWER_COST = 50
 
 # Colors
 WHITE = (255, 255, 255)
@@ -21,6 +22,7 @@ RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 LIGHT_BLUE = (173, 216, 230)
 YELLOW = (255, 255, 0)
+GOLD = (255, 215, 0)
 
 # Path coordinates (grid positions)
 PATH = [
@@ -38,6 +40,7 @@ screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 pygame.display.set_caption("Tower Defense")
 clock = pygame.time.Clock()
 font = pygame.font.Font(None, 36)
+small_font = pygame.font.Font(None, 24)
 
 class Enemy:
     def __init__(self, speed_multiplier=1, health_multiplier=1):
@@ -48,7 +51,7 @@ class Enemy:
         self.radius = 12
         self.health = 100 * health_multiplier
         self.max_health = 100 * health_multiplier
-        self.reward = 10
+        self.reward = int(10 * health_multiplier)
         
     def move(self):
         if self.path_index < len(PATH) - 1:
@@ -154,8 +157,7 @@ class WaveManager:
         self.wave_complete = False
         
     def spawn_enemy(self):
-        if self.enemies_to_spawn > 0 and self.spawn_timer <=0:
-            
+        if self.enemies_to_spawn > 0 and self.spawn_timer <= 0:
             self.spawn_timer = self.spawn_delay
             self.enemies_to_spawn -= 1
             speed_mult = 1 + (self.wave - 1) * 0.1
@@ -172,6 +174,27 @@ class WaveManager:
         self.enemies_per_wave += 2
         self.enemies_to_spawn = self.enemies_per_wave
         self.wave_complete = False
+
+class GameState:
+    def __init__(self):
+        self.money = 200
+        self.lives = 20
+        self.score = 0
+        
+    def add_money(self, amount):
+        self.money += amount
+        
+    def spend_money(self, amount):
+        if self.money >= amount:
+            self.money -= amount
+            return True
+        return False
+    
+    def lose_life(self):
+        self.lives -= 1
+        
+    def add_score(self, points):
+        self.score += points
 
 def is_valid_tower_position(grid_x, grid_y, towers):
     # Check if position is on path
@@ -194,12 +217,34 @@ def draw_path():
         rect = pygame.Rect(pos[0] * GRID_SIZE, pos[1] * GRID_SIZE, GRID_SIZE, GRID_SIZE)
         pygame.draw.rect(screen, BROWN, rect)
 
+def draw_ui(game_state, wave_manager):
+    # Wave info
+    wave_text = font.render(f"Wave: {wave_manager.wave}", True, WHITE)
+    screen.blit(wave_text, (10, 10))
+    
+    # Money
+    money_text = font.render(f"Money: ${game_state.money}", True, GOLD)
+    screen.blit(money_text, (10, 45))
+    
+    # Lives
+    lives_text = font.render(f"Lives: {game_state.lives}", True, RED)
+    screen.blit(lives_text, (10, 80))
+    
+    # Score
+    score_text = small_font.render(f"Score: {game_state.score}", True, WHITE)
+    screen.blit(score_text, (10, 115))
+    
+    # Tower cost
+    cost_text = small_font.render(f"Tower Cost: ${TOWER_COST}", True, WHITE)
+    screen.blit(cost_text, (WINDOW_WIDTH - 180, 10))
+
 def main():
     running = True
     enemies = []
     towers = []
     projectiles = []
     wave_manager = WaveManager()
+    game_state = GameState()
     
     while running:
         for event in pygame.event.get():
@@ -211,7 +256,8 @@ def main():
                 grid_y = mouse_y // GRID_SIZE
                 
                 if is_valid_tower_position(grid_x, grid_y, towers):
-                    towers.append(Tower(grid_x, grid_y))
+                    if game_state.spend_money(TOWER_COST):
+                        towers.append(Tower(grid_x, grid_y))
         
         # Spawn enemies
         wave_manager.update()
@@ -224,8 +270,11 @@ def main():
             wave_manager.next_wave()
         
         # Update enemies
-        for enemy in enemies:
+        for enemy in enemies[:]:
             enemy.move()
+            if enemy.reached_end():
+                game_state.lose_life()
+                enemies.remove(enemy)
         
         # Update towers
         for tower in towers:
@@ -243,8 +292,16 @@ def main():
                     projectile.target.take_damage(projectile.damage)
                 projectiles.remove(projectile)
         
-        # Remove dead enemies and enemies that reached end
-        enemies = [enemy for enemy in enemies if enemy.is_alive() and not enemy.reached_end()]
+        # Remove dead enemies and give rewards
+        for enemy in enemies[:]:
+            if not enemy.is_alive():
+                game_state.add_money(enemy.reward)
+                game_state.add_score(enemy.reward * 10)
+                enemies.remove(enemy)
+        
+        # Check game over
+        if game_state.lives <= 0:
+            running = False
         
         # Fill screen
         screen.fill(GREEN)
@@ -258,10 +315,7 @@ def main():
         for enemy in enemies:
             enemy.draw()
         draw_grid()
-        
-        # Draw wave info
-        wave_text = font.render(f"Wave: {wave_manager.wave}", True, WHITE)
-        screen.blit(wave_text, (10, 10))
+        draw_ui(game_state, wave_manager)
         
         # Update display
         pygame.display.flip()
