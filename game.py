@@ -465,7 +465,7 @@ def main():
                         game_state.high_score = game_state.score
 
         # Rendering
-        screen.fill(DARK_GREEN)
+        screen.fill((15, 15, 40))
         draw_path()
         for tower in towers:
             tower.draw(selected=(tower == selected_tower))
